@@ -1,10 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { z } from 'zod';
 
-const SAMPLE_RESPONSE = {
-  emissions_kg: 2.4,
-  distance_km: 450,
-  transport_mode: 'ground',
-  confidence: 0.95,
+// Input validation schema
+const CalculateRequest = z.object({
+  origin: z.string().min(1, 'Origin is required'),
+  destination: z.string().min(1, 'Destination is required'),
+  weight_kg: z.number().positive('Weight must be positive'),
+  transport_mode: z.enum(['ground', 'air', 'sea']).optional().default('ground'),
+});
+
+// Hardcoded v0 - replace with real logic later
+const EMISSION_FACTORS = {
+  ground: 0.1, // kg CO2 per km per kg
+  air: 0.5,
+  sea: 0.02,
 };
 
 export async function POST(request: NextRequest) {
@@ -13,21 +22,30 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
 
-    if (!body.origin || !body.destination || !body.weight_kg) {
+    // Validate input
+    const parsed = CalculateRequest.safeParse(body);
+    if (!parsed.success) {
       return NextResponse.json(
-        { error: 'Missing required fields: origin, destination, weight_kg' },
+        { error: 'Validation failed', details: parsed.error.flatten().fieldErrors },
         { status: 400 }
       );
     }
 
+    const { origin, destination, weight_kg, transport_mode } = parsed.data;
+
+    // Fake distance for now (we'll add real lookup later)
+    const distance_km = 450;
+
+    // Calculate emissions
+    const emissions_kg = distance_km * weight_kg * EMISSION_FACTORS[transport_mode];
+
     const response = {
-      ...SAMPLE_RESPONSE,
+      emissions_kg: Math.round(emissions_kg * 100) / 100,
+      distance_km,
+      transport_mode,
+      confidence: 0.95,
       calculation_id: crypto.randomUUID(),
-      request: {
-        origin: body.origin,
-        destination: body.destination,
-        weight_kg: body.weight_kg,
-      },
+      request: { origin, destination, weight_kg },
       latency_ms: Math.round(performance.now() - startTime),
     };
 
