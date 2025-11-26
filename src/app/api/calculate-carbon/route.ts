@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
+import { calculateDistance } from '@/lib/distance';
 
-// Input validation schema
 const CalculateRequest = z.object({
   origin: z.string().min(1, 'Origin is required'),
   destination: z.string().min(1, 'Destination is required'),
@@ -9,9 +9,8 @@ const CalculateRequest = z.object({
   transport_mode: z.enum(['ground', 'air', 'sea']).optional().default('ground'),
 });
 
-// Hardcoded v0 - replace with real logic later
 const EMISSION_FACTORS = {
-  ground: 0.1, // kg CO2 per km per kg
+  ground: 0.1,
   air: 0.5,
   sea: 0.02,
 };
@@ -22,7 +21,6 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
 
-    // Validate input
     const parsed = CalculateRequest.safeParse(body);
     if (!parsed.success) {
       return NextResponse.json(
@@ -33,10 +31,16 @@ export async function POST(request: NextRequest) {
 
     const { origin, destination, weight_kg, transport_mode } = parsed.data;
 
-    // Fake distance for now (we'll add real lookup later)
-    const distance_km = 450;
+    // Calculate real distance
+    const distanceResult = calculateDistance(origin, destination);
+    if (!distanceResult.success) {
+      return NextResponse.json(
+        { error: distanceResult.error },
+        { status: 400 }
+      );
+    }
 
-    // Calculate emissions
+    const { distance_km } = distanceResult;
     const emissions_kg = distance_km * weight_kg * EMISSION_FACTORS[transport_mode];
 
     const response = {
